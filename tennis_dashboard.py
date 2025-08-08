@@ -1,115 +1,75 @@
-%%writefile tennis_dashboard.py
-
-
+code = '''
 import streamlit as st
 import pandas as pd
-import sqlalchemy
-from sqlalchemy import create_engine, text
-import plotly.express as px
+import mysql.connector
+from mysql.connector import Error
 
-# Database configuration
-DB_USER = 'root'
-DB_PASSWORD = 'princepk3366&$'
-DB_HOST = 'localhost'
-DB_PORT = '3306'
-DB_NAME = 'sys'
+st.set_page_config(page_title="🎾 Tennis Dashboard", layout="wide")
 
-def get_engine():
-    url = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    return create_engine(url)
-
-# Load data functions
-def load_doubles_rankings(engine, year_range, week_range, gender, rank_range):
+# ---- DB Query Function ----
+def run_query(query):
     try:
-        with engine.connect() as conn:
-            query = text(f"""
-                SELECT * FROM doubles_rankings
-                WHERE `rank` BETWEEN :rank_start AND :rank_end
-                ORDER BY `rank` ASC
-            """)
-            result = conn.execute(query, {
-                'rank_start': rank_range[0],
-                'rank_end': rank_range[1]
-            })
-            return pd.DataFrame(result.fetchall(), columns=result.keys())
-    except Exception as e:
-        st.error(f"Error loading rankings: {e}")
+        conn = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="your_password",       # <-- Replace with your MySQL password
+            database="your_database_name"   # <-- Replace with your MySQL DB name
+        )
+        df = pd.read_sql(query, conn)
+        return df
+    except Error as e:
+        st.error(f"Error retrieving data from database.\n{e}")
         return pd.DataFrame()
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            conn.close()
 
-def load_competitions(engine):
-    try:
-        with engine.connect() as conn:
-            df = pd.read_sql("SELECT * FROM competitions", conn)
-            return df
-    except Exception as e:
-        st.error(f"Error loading competitions: {e}")
-        return pd.DataFrame()
+# ---- Sidebar Filters ----
+st.sidebar.header("🎯 Filters")
+year = st.sidebar.number_input("Year", min_value=2000, max_value=2030, value=2024, step=1)
+week = st.sidebar.number_input("Week", min_value=1, max_value=52, value=48, step=1)
+gender = st.sidebar.selectbox("Gender", ["men", "women"])
+rank_range = st.sidebar.slider("Rank Range", 1, 100, (1, 50))
 
-def load_complexes(engine):
-    try:
-        with engine.connect() as conn:
-            df = pd.read_sql("SELECT * FROM complexes", conn)
-            return df
-    except Exception as e:
-        st.error(f"Error loading complexes: {e}")
-        return pd.DataFrame()
+# ---- Main Title ----
+st.title("🎾 Tennis Data Explorer")
 
-# App layout
-st.set_page_config(page_title="Tennis Analytics Dashboard", layout="wide")
-st.title("🎾 Tennis Analytics Dashboard")
+# ---- Tabs ----
+tab1, tab2, tab3 = st.tabs(["🏆 Rankings", "📍 Venues", "📊 Future Insights"])
 
-# Sidebar filters
-st.sidebar.header("Filters")
-rank_range = st.sidebar.slider("Select Rank Range", 1, 100, (1, 20))
-gender = st.sidebar.selectbox("Select Gender", ["All", "male", "female"])
-year_range = st.sidebar.slider("Year Range (N/A in sample)", 2000, 2030, (2020, 2025))
-week_range = st.sidebar.slider("Week Range (N/A in sample)", 1, 52, (1, 10))
+# ---- Tab 1: Rankings ----
+with tab1:
+    st.subheader("Filtered Doubles Rankings")
 
-# Connect to DB
-db_engine = get_engine()
+    query = f"""
+        SELECT tour, year, week, gender, rank, points, player_name, country
+        FROM doubles_rankings
+        WHERE year = {year}
+          AND week = {week}
+          AND gender = '{gender}'
+          AND rank BETWEEN {rank_range[0]} AND {rank_range[1]}
+        ORDER BY rank ASC
+        LIMIT 100;
+    """
 
-tabs = st.tabs(["🏆 Doubles Rankings", "📊 Competitions", "🏟 Complexes & Venues"])
-
-# Tab 1: Doubles Rankings
-with tabs[0]:
-    st.subheader("Top Doubles Rankings")
-    rankings_df = load_doubles_rankings(db_engine, year_range, week_range, gender, rank_range)
-    if not rankings_df.empty:
-        st.dataframe(rankings_df, use_container_width=True)
-
-        fig = px.bar(rankings_df, x='team_name', y='points', color='country',
-                     title='Points by Team (Top Rankings)', text='rank')
-        fig.update_layout(xaxis_title="Team Name", yaxis_title="Points", template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
+    df_rankings = run_query(query)
+    if not df_rankings.empty:
+        st.dataframe(df_rankings)
     else:
-        st.warning("No ranking data found for the selected filters.")
+        st.warning("No data found for selected filters.")
 
-# Tab 2: Competitions
-with tabs[1]:
-    st.subheader("Competition Details")
-    competitions_df = load_competitions(db_engine)
-    if not competitions_df.empty:
-        st.dataframe(competitions_df, use_container_width=True)
+# ---- Tab 2: Venues ----
+with tab2:
+    st.subheader("Venue and Complex Insights")
+    st.info("Add venue-wise visuals, maps, or tournament distributions here.")
 
-        comp_counts = competitions_df['gender'].value_counts().reset_index()
-        comp_counts.columns = ['Gender', 'Count']
-        fig = px.pie(comp_counts, values='Count', names='Gender', title='Competitions by Gender', hole=0.4)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("No competition data available.")
+# ---- Tab 3: Future Insights ----
+with tab3:
+    st.subheader("Upcoming: Performance & Player Insights")
+    st.info("This section is under development for advanced analytics like player progress, country-level summaries, etc.")
 
-# Tab 3: Complexes and Venues
-with tabs[2]:
-    st.subheader("Tennis Complexes and Venues")
-    complexes_df = load_complexes(db_engine)
-    if not complexes_df.empty:
-        st.dataframe(complexes_df, use_container_width=True)
+'''
 
-        complexes_df['venue_count'] = complexes_df['venues'].apply(lambda v: len(v.split(',')) if isinstance(v, str) else 0)
-        fig = px.bar(complexes_df, x='name', y='venue_count', title='Number of Venues per Complex', text='venue_count')
-        fig.update_layout(xaxis_title="Complex Name", yaxis_title="Venue Count", template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("No complexes or venues data found.")
-
-
+# Save the code to file
+with open("tennis_dashboard.py", "w", encoding="utf-8") as f:
+    f.write(code)
