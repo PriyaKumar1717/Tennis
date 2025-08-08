@@ -1,4 +1,4 @@
-code = '''
+
 import streamlit as st
 import pandas as pd
 import mysql.connector
@@ -68,8 +68,6 @@ with tab3:
     st.subheader("Upcoming: Performance & Player Insights")
     st.info("This section is under development for advanced analytics like player progress, country-level summaries, etc.")
 
-'''
 
-# Save the code to file
-with open("tennis_dashboard.py", "w", encoding="utf-8") as f:
-    f.write(code)
+
+
