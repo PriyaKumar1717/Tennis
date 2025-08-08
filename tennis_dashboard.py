@@ -1,3 +1,4 @@
+%%writefile tennis_dashboard.py
 
 
 import streamlit as st
